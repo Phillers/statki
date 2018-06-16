@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+canvas{
+border: 2px solid black;
+}
+
+table{
+border: 2px solid black;
+}
+
+tr,td,th{
+border: 1px solid black;
+}
+
+#ships{
+float: right;
+display: none;
+}
+
+#enemy, #you{
+float: left;
+}
+
+#error{
+	color: red;
+	float: right;
+}
+
+</style>
+</head>
+
+<body>
+<div id="form">
+<h4>Podaj adres serwera</h4>
+<input type="text" name="address" id="address" />
+<button id="connect">Połącz</button>
+</div>
+<div>
+<button id="resign">Zrezygnuj</button>
+</div>
+<div id="ships">
+	<table>
+		<tr>
+			<th>Rozmieść statki na swojej planszy</th>
+		</tr>
+		<tr>
+			<th>Długość</th>
+			<th>Pozostało</th>
+		</tr>
+		<tr>
+			<td>1</td>
+			<td id="1">0</td>
+		</tr>
+		<tr>
+			<td>2</td>
+			<td id="2">1</td>
+		</tr>
+		<tr>
+			<td>3</td>
+			<td id="3">2</td>
+		</tr>
+		<tr>
+			<td>4</td>
+			<td id="4">1</td>
+		</tr>
+		<tr>
+			<td>5</td>
+			<td id="5">1</td>
+		</tr>
+		<tr>
+			<td>&gt;5</td>
+			<td id="6">0</td>
+		</tr>
+	</table>
+	<button id="send">Wyślij</button>
+</div>
+<h3 id = "error"></h3>
+<p hidden id="0">0</p>
+<div id="enemy">
+<h3>Plansza przeciwnika</h3>
+<canvas id="board1" width="550" height="550" ></canvas>
+</div>
+
+<div id="you">
+<h3>Twoja plansza</h3>
+<canvas id="board2" width="550" height="550" ></canvas>
+</div>
+</body>
+<script>
+<!--
+
+var id=-1;
+
+function init() {
+  var address = document.getElementById("address").value;
+  websocket = new WebSocket("ws://"+address+":8888/ws");
+  websocket.onopen = function(e) { onOpen(e) };
+  websocket.onclose = function(e) { onClose(e) };
+  websocket.onmessage = function(e) { onMessage(e) };
+  websocket.onerror = function(e) { onError(e) };
+  websocket.binaryType="arraybuffer"
+}
+
+
+function onOpen(e) {
+  console.log(e.type);
+  var url = window.location.href;
+  var i1=url.indexOf("id=");
+  if(i1>0){
+  	i1+=3;
+  	var i2=url.indexOf('&', i1);
+  	var str;
+  	if(i2>0)str=url.substr(i1, i2-i1);
+  	else str=url.substr(i1);
+  	var view1 = new Int8Array(2);
+  	view1[0] = 0;
+  	view1[1] = parseInt(str);
+  	id = view1[1];
+  	websocket.send(view1.buffer); 
+  } else
+  websocket.send("Hello");
+}
+
+function onClose(e){
+	
+}
+
+function onError(e){
+	
+}
+
+function onMessage(e) {
+  var view1 = new Int8Array(e.data, 0, 2);
+  console.log(view1); 
+  switch(view1[0]){
+  	case 1:  		
+  		location.search="?id="+view1[1]+"&server="+document.getElementById("address").value;	
+  		break;
+  	case 2:
+  		var view2 = new Int8Array(e.data, 2, 100);
+  		var view3 = new Int8Array(e.data, 102, 100);
+  		copyBoards(view2, view3);
+  		resolveTurns(view1[1]);
+  		document.getElementById("form").style.display="none";
+  		document.getElementById("resign").addEventListener("click", resign);
+  		break;
+  	case 4:
+  		resolveTurns(view1[1]);
+  		break;
+  	case 6:
+  		view = new Int8Array(e.data, 2);
+  		resolveShot(view1[1], view[0], view[1], view[2]);
+  		break;
+  	case 7:
+  		view = new Int8Array(e.data, 2);
+  		console.log(view);
+  		resolveSink(view1[1], view);
+  		break;
+  	case 8:
+  		resolveTurns(-1);
+  		var str = "\nAby rozpocząć nową grę odśwież stronę";
+  		if(view1[1]==1)
+  			str="Gratulacje, wygrałeś"+str;
+  		else if(view1[1]==0)
+  			str="Niestety przegrałeś"+str;
+  		document.getElementById("error").innerText=str;
+  		b1.removeEventListener("click", handler);
+		break;
+	case 11:
+		location.search="";
+		document.getElementById("error").innerText="Przeciwnik się poddał"
+	
+	
+	}
+}
+
+var load = function(e){
+  var url = window.location.href;
+  var i1=url.indexOf("server=");
+  if(i1>0){
+  	i1+=7;
+  	document.getElementById("address").value=url.substr(i1);
+  	init();
+  }
+}
+
+window.addEventListener("load", load);
+
+document.getElementById("connect").addEventListener("click", init, false);
+
+var resign = function(e){
+	var view=new Int8Array(2);
+	view[0]=10;
+	view[1]=id;
+	websocket.send(view);
+	location.search="";
+
+}
+var resolveTurns = function(n){
+	var info = ""
+	if(n==-2){
+	  	document.getElementById("ships").style.display="inline-block";
+	  	b2.addEventListener("click", handler);	
+	}
+	if(n==-1){
+		info="Szukanie przeciwnika";		
+	}else if(n==0){
+		info = "Trwa tura przeciwnika";
+	}else if(n>0){
+		info = "Twoja kolej\n Pozostało "+n+" strzałów";
+		b1.addEventListener("click", handler);		
+	}
+	document.getElementById("error").innerText=info;
+}
+
+var b1=document.getElementById("board1");
+var b2=document.getElementById("board2");
+var canvas = [b1,b2];
+var colors = ["blue", "grey", "red", "aqua", "black"];
+var c1=b1.getContext("2d");
+var c2=b2.getContext("2d");
+c1.font ="30px Arial";
+c2.font ="30px Arial";
+
+var i,j;
+var board1 = Array(10);
+var board2 = Array(10);
+for(i=0;i<10;i++){
+	board1[i]=Array(10).fill(0);
+	board2[i]=Array(10).fill(0);
+}
+var boards = [board1, board2];
+
+var resolveShot = function(n, x, y, s){
+	boards[n][x][y]=s;
+	drawRect(canvas[n].getContext("2d"), x, y, colors[s]);
+}
+
+var sink = function(n, x, y){
+	console.log(n, x, y);
+	boards[n][x][y]=4;
+	drawRect(canvas[n].getContext("2d"), x, y, colors[4]);
+}
+
+var resolveSink = function(n, view){
+	var c=view[0];
+	var x=view[1];
+	var y=view[2];
+	sink(n, x, y);
+	if(c>0){
+		for(i=0;i<c;i++)
+			sink(n, view[3+i] ,y);
+	} else{
+		for(i=0;i>c;i--)
+			sink(n, x, view[3-i]);
+	}
+}
+
+var copyBoards = function(b2, b1){
+	for(var i=0;i<10;i++){
+		for(var j=0;j<10;j++){
+			board1[i][j]=b1[i*10+j];
+			drawRect(c1, i, j, colors[board1[i][j]]);
+			board2[i][j]=b2[i*10+j];
+			drawRect(c2, i, j, colors[board2[i][j]]);
+		}	
+	}
+}
+
+var sendShips = function(){
+	console.log("sending");
+	for(var i=1;i<=6;i++){
+		if(document.getElementById(i).innerText!=0){
+			document.getElementById("error").innerText="Zła liczba statków o długości "+i;
+			return;
+		}
+	}
+	var buffer = new Int8Array(102);
+	buffer[0]=3;
+	buffer[1]=id;
+	var view = new Int8Array(buffer.buffer, 2);
+	for(var i=0;i<10;i++){
+		for(var j=0;j<10;j++){
+			view[i*10+j]=board2[i][j];
+		}	
+	}
+	websocket.send(buffer);
+	document.getElementById("ships").style.display="none";
+	b2.removeEventListener("click", handler);
+}
+
+document.getElementById("send").addEventListener("click", sendShips);
+
+for(i=1;i<11;i++){
+	c1.rect(i*50,0,50,550);
+	c1.stroke();
+	c1.fillText(i,i*50+10,35);
+	c2.rect(i*50,0,50,550);
+	c2.stroke();
+	c2.fillText(i,i*50+10,35);
+}
+for(i=1;i<11;i++){
+	c1.rect(0,i*50,550,50);
+	c1.stroke();
+	c1.fillText(String.fromCharCode(i+64),15,i*50+35);
+	c2.rect(0,i*50,550,50);
+	c2.stroke();
+	c2.fillText(String.fromCharCode(i+64),15,i*50+35);
+}
+
+var drawRect = function(c, x, y, f){
+	c.fillStyle = f;
+	c.fillRect((x+1)*50+1,(y+1)*50+1,48,48);
+}
+
+var placeShip = function(x, y){
+	var l=true, r=true, u=true, d=true;
+	 
+	if(x<=0||y<=0||x>=9||y>=9){
+		if(x<=0)l=false;
+		if(y<=0)u=false;
+		if(x>=9)r=false;
+		if(y>=9)d=false;
+		if(l){
+			if(u)if(board2[x-1][y-1]>0)return;
+			if(d)if(board2[x-1][y+1]>0)return;
+		}
+		if(r){
+			if(u)if(board2[x+1][y-1]>0)return;
+			if(d)if(board2[x+1][y+1]>0)return;
+		}	
+	}else
+		if(board2[x-1][y-1]+board2[x+1][y-1]+board2[x-1][y+1]+board2[x+1][y+1]>0)
+			return;
+
+	if(l)
+		for(i=1;i<=x&&board2[x-i][y]>0;i++);
+	else i=1;
+	pre=i-1;
+	if(r)
+		for(i=1;i+x<=9&&board2[x+i][y]>0;i++);
+	else i=1;
+	nex=i-1;
+		
+	if(pre+nex<=0){
+		if(u)
+			for(i=1;i<=y&&board2[x][y-i]>0;i++);
+		else i=1;
+		pre=i-1;
+		if(d)
+			for(i=1;i+y<=9&&board2[x][y+i]>0;i++);
+		else i=1;
+		nex=i-1;
+	}
+	var count = pre+nex+1;
+	if (count>6)count=6;
+	if (nex>6)nex=6;
+	if (pre>6)pre=6;
+	var p=document.getElementById(pre);
+	var n=document.getElementById(nex);
+	var c=document.getElementById(count);
+	
+	if(board2[x][y]>0){
+		board2[x][y]=0;
+		drawRect(c2, x, y, colors[0]);
+		c.innerText=1*c.innerText+1;
+		p.innerText=1*p.innerText-1;
+		n.innerText=1*n.innerText-1;
+	}else{
+		board2[x][y]=1;
+		drawRect(c2, x, y, colors[1]);
+		c.innerText=1*c.innerText-1;
+		p.innerText=1*p.innerText+1;
+		n.innerText=1*n.innerText+1;
+	}
+}
+
+var handler = function(e){
+	var canv=this;
+	var cid=canvas.indexOf(canv);
+	var x1 = e.offsetX;
+	var y1 = e.offsetY;
+	var x = Math.floor(x1/50)-1;
+	var y = Math.floor(y1/50)-1;
+	if(x<0||y<0)return;
+
+	if(cid>0){
+		placeShip(x, y);
+		return;
+	}
+	
+	var board=boards[cid];
+	if(board[x][y]!=1)return;
+	
+	var array = new Int8Array(4);	
+	array[0]=5;
+	array[1]=id;
+	array[2]=x;
+	array[3]=y;
+	b1.removeEventListener("click", handler);
+	websocket.send(array);
+	
+}
+
+-->
+</script>
+</html>
+
