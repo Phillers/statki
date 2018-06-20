@@ -34,8 +34,12 @@ def start_game(a, b):
     enemies[b] = a
     turns[a] = 3
     turns[b] = 0
-    sockets[a].write_message(struct.pack("bb", 4, turns[a]), binary=True)
-    sockets[b].write_message(struct.pack("bb", 4, turns[b]), binary=True)
+    try:
+        sockets[a].write_message(struct.pack("bb", 4, turns[a]), binary=True)
+    except Exception:
+        pass
+    finally:
+        sockets[b].write_message(struct.pack("bb", 4, turns[b]), binary=True)
 
 
 def check_sunk(board, x, y):
@@ -90,8 +94,6 @@ def check_sunk(board, x, y):
 
 def sink(a, b, s, l):
     f = "bbb" + str(len(l)) + "s"
-    sockets[b].write_message(struct.pack(f, 7, 1, s, bytes(l)), binary=True)
-    sockets[a].write_message(struct.pack(f, 7, 0, s, bytes(l)), binary=True)
     b1 = boards[b]
     b2 = targets[a]
     x = l[0]
@@ -109,9 +111,19 @@ def sink(a, b, s, l):
             b1[x * 10 + y2] = 4
             b2[x * 10 + y2] = 4
     sunk[a] += 1
+    try:
+        sockets[b].write_message(struct.pack(f, 7, 1, s, bytes(l)), binary=True)
+    except Exception:
+        pass
+    finally:
+        sockets[a].write_message(struct.pack(f, 7, 0, s, bytes(l)), binary=True)
     if(sunk[a]==5):
-        sockets[b].write_message(struct.pack("bb", 8, 0), binary=True)
-        sockets[a].write_message(struct.pack("bb", 8, 1), binary=True)
+        try:
+            sockets[b].write_message(struct.pack("bb", 8, 0), binary=True)
+        except Exception:
+            pass
+        finally:
+            sockets[a].write_message(struct.pack("bb", 8, 1), binary=True)
         create_player(a)
         create_player(b)
 
@@ -132,16 +144,23 @@ def resolve_shot(id, x, y):
         (s, l) = check_sunk(board, x, y)
     board[x * 10 + y] = s1
     target[x * 10 + y] = s2
-    sockets[enemy].write_message(struct.pack("bbbbb", 6, 1, x, y, s1), binary=True)
-    sockets[id].write_message(struct.pack("bbbbb", 6, 0, x, y, s2), binary=True)
     turns[id] -= 1
     if (turns[id] == 0):
         turns[enemy] = 3
-    sockets[id].write_message(struct.pack("bb", 4, turns[id]), binary=True)
-    sockets[enemy].write_message(struct.pack("bb", 4, turns[enemy]), binary=True)
+    try:
+        sockets[enemy].write_message(struct.pack("bbbbb", 6, 1, x, y, s1), binary=True)
+    except Exception:
+        pass
+    finally:
+        sockets[id].write_message(struct.pack("bbbbb", 6, 0, x, y, s2), binary=True)
+    try:
+        sockets[enemy].write_message(struct.pack("bb", 4, turns[enemy]), binary=True)
+    except Exception:
+        pass
+    finally:
+        sockets[id].write_message(struct.pack("bb", 4, turns[id]), binary=True)
     if (s != 0):
         sink(id, enemy, s, l)
-
 
 class EchoHandler(tornado.websocket.WebSocketHandler):
     def open(self):
@@ -152,7 +171,7 @@ class EchoHandler(tornado.websocket.WebSocketHandler):
 
     def on_message(self, message):
         global next_index, boards, targets, sockets, waiting, turns
-        print("message " + str(message[0]))
+        print("message " + str(message[0])+ ' '+str(message[1]))
         if (message == "Hello"):
             self.write_message(bytes([1, next_index]), binary=True)
             create_player(next_index)
@@ -183,8 +202,12 @@ class EchoHandler(tornado.websocket.WebSocketHandler):
             resolve_shot(message[1], message[2], message[3])
         elif (message[0]==10):
             if(turns[message[1]]!=-2):
-                sockets[enemies[message[1]]].write_message(struct.pack("bb", 11, 0), binary=True)
-                create_player(enemies[message[1]])
+                try:
+                    sockets[enemies[message[1]]].write_message(struct.pack("bb", 11, 0), binary=True)
+                except Exception:
+                    pass
+                finally:
+                    create_player(enemies[message[1]])
             create_player(message[1])
 
         else:

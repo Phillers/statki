@@ -379,8 +379,10 @@ var placeShip = function(x, y){
 }
 
 var handler = function(e){
+	
 	var canv=this;
 	var cid=canvas.indexOf(canv);
+	console.log(cid);
 	var x1 = e.offsetX;
 	var y1 = e.offsetY;
 	var x = Math.floor(x1/50)-1;
@@ -402,6 +404,8 @@ var handler = function(e){
 	array[3]=y;
 	b1.removeEventListener("click", handler);
 	websocket.send(array);
+	console.log(websocket);
+	console.log(array);
 	
 }
 
